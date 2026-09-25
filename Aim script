@@ -1,0 +1,84 @@
+local player = game.Players.LocalPlayer
+local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
+
+-- UI가 이미 있다면 제거
+if player.PlayerGui:FindFirstChild("LockOnGui") then
+    player.PlayerGui.LockOnGui:Destroy()
+end
+
+-- ScreenGui 생성
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "LockOnGui"
+screenGui.Parent = player.PlayerGui
+
+-- 네모난 스위치 버튼 만들기
+local toggleButton = Instance.new("TextButton")
+toggleButton.Size = UDim2.new(0, 90, 0, 45) -- 네모난 직사각형 모양
+toggleButton.Position = UDim2.new(0.85, 0, 0.15, 0) -- 화면 우측 상단
+toggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+toggleButton.BorderSizePixel = 2
+toggleButton.BorderColor3 = Color3.fromRGB(255, 255, 255)
+toggleButton.Text = "OFF\n(시점고정)"
+toggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
+toggleButton.TextSize = 13
+toggleButton.Font = Enum.Font.GothamBold
+toggleButton.Parent = screenGui
+
+-- 모서리가 약간 둥근 네모 모양 (UICorner)
+local uiCorner = Instance.new("UICorner")
+uiCorner.CornerRadius = UDim.new(0, 8)
+uiCorner.Parent = toggleButton
+
+-- 상태 변수 및 타겟 변수
+local isOn = false
+local lockedTarget = nil
+
+-- 버튼 클릭 이벤트 (ON / OFF 토글)
+toggleButton.MouseButton1Click:Connect(function()
+    isOn = not isOn
+    if isOn then
+        toggleButton.Text = "ON\n(시점고정)"
+        toggleButton.TextColor3 = Color3.fromRGB(60, 255, 60)
+        toggleButton.BackgroundColor3 = Color3.fromRGB(20, 80, 20)
+        print("시점 고정 모드 켜짐 (플레이어를 클릭하세요)")
+    else
+        toggleButton.Text = "OFF\n(시점고정)"
+        toggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
+        toggleButton.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
+        lockedTarget = nil
+        print("시점 고정 모드 꺼짐")
+    end
+end)
+
+-- 화면을 클릭했을 때 플레이어를 타겟으로 지정하는 기능
+mouse.Button1Down:Connect(function()
+    if isOn then
+        local target = mouse.Target
+        if target and target.Parent then
+            -- 클릭한 대상이 다른 플레이어의 캐릭터인지 확인 (자신 제외)
+            local character = target.Parent
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid and game.Players:GetPlayerFromCharacter(character) and game.Players:GetPlayerFromCharacter(character) ~= player then
+                lockedTarget = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
+                print("타겟 설정됨: " .. character.Name)
+            end
+        end
+    end
+end)
+
+-- 매 프레임마다 카메라가 타겟을 바라보게 강제 고정
+game:GetService("RunService").RenderStepped:Connect(function()
+    if isOn and lockedTarget and lockedTarget.Parent then
+        -- 타겟의 위치를 카메라가 부드럽게 계속 주시하도록 함
+        camera.CameraType = Enum.CameraType.Scriptable
+        camera.CFrame = CFrame.new(camera.CFrame.Position, lockedTarget.Position)
+    else
+        -- 고정 대상이 없거나 OFF면 카메라를 기본 상태로 돌려줌
+        if camera.CameraType == Enum.CameraType.Scriptable and not isOn then
+            camera.CameraType = Enum.CameraType.Custom
+        end
+    end
+end)
+
+print("네모난 시점 고정 스위치 UI가 생성되었습니다!")
