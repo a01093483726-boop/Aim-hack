@@ -1,84 +1,103 @@
 local player = game.Players.LocalPlayer
-local mouse = player:GetMouse()
 local camera = workspace.CurrentCamera
 local runService = game:GetService("RunService")
+local userInputService = game:GetService("UserInputService")
 
--- ScreenGui 생성 (고유한 이름 사용)
+-- ScreenGui 생성
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "AimBotUniqueGui_2026"
+screenGui.Name = "CrosshairAimBotGui"
 screenGui.Parent = player.PlayerGui
 
--- 네모난 스위치 버튼 만들기
+-- [1] 화면 정중앙에 작은 원(조준원) 만들기
+local crosshair = Instance.new("Frame")
+crosshair.Size = UDim2.new(0, 10, 0, 10) -- 원 크기 (조절 가능)
+crosshair.Position = UDim2.new(0.5, -5, 0.5, -5) -- 정확히 화면 정중앙
+crosshair.BackgroundColor3 = Color3.fromRGB(0, 255, 255) -- 하늘색 원
+crosshair.BorderSizePixel = 0
+crosshair.Visible = false -- 처음엔 꺼져있다가 ON하면 켜짐
+crosshair.Parent = screenGui
+
+local crosshairCorner = Instance.new("UICorner")
+crosshairCorner.CornerRadius = UDim.new(1, 0) -- 완전한 동그라미로 만들기
+crosshairCorner.Parent = crosshair
+
+-- [2] 네모난 스위치 버튼 만들기 (우측 상단)
 local toggleButton = Instance.new("TextButton")
-toggleButton.Size = UDim2.new(0, 90, 0, 45) -- 네모난 직사각형 모양
-toggleButton.Position = UDim2.new(0.85, 0, 0.15, 0) -- 화면 우측 상단
+toggleButton.Size = UDim2.new(0, 90, 0, 45)
+toggleButton.Position = UDim2.new(0.85, 0, 0.15, 0)
 toggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 toggleButton.BorderSizePixel = 2
 toggleButton.BorderColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Text = "OFF\n(에임봇)"
+toggleButton.Text = "OFF\n(중앙원 에임봇)"
 toggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
-toggleButton.TextSize = 12
+toggleButton.TextSize = 11
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.Parent = screenGui
 
--- 모서리가 약간 둥근 네모 모양 (UICorner)
 local uiCorner = Instance.new("UICorner")
 uiCorner.CornerRadius = UDim.new(0, 8)
 uiCorner.Parent = toggleButton
 
--- 상태 변수 및 타겟 변수
+-- 상태 변수
 local isOn = false
-local lockedTarget = nil
 
 -- 버튼 클릭 이벤트 (ON / OFF 토글)
 toggleButton.MouseButton1Click:Connect(function()
     isOn = not isOn
     if isOn then
-        toggleButton.Text = "ON\n(에임봇)"
+        toggleButton.Text = "ON\n(중앙원 에임봇)"
         toggleButton.TextColor3 = Color3.fromRGB(60, 255, 60)
         toggleButton.BackgroundColor3 = Color3.fromRGB(20, 80, 20)
-        print("에임봇 켜짐 (조준할 상대를 클릭하세요)")
+        crosshair.Visible = true -- 중앙 원 켜기
+        print("중앙원 에임봇 켜짐")
     else
-        toggleButton.Text = "OFF\n(에임봇)"
+        toggleButton.Text = "OFF\n(중앙원 에임봇)"
         toggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
         toggleButton.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
-        lockedTarget = nil
-        print("에임봇 꺼짐")
+        crosshair.Visible = false -- 중앙 원 끄기
+        print("중앙원 에임봇 꺼짐")
     end
 end)
 
--- 화면을 클릭했을 때 조준할 상대 지정
-mouse.Button1Down:Connect(function()
-    if isOn then
-        local target = mouse.Target
-        if target and target.Parent then
-            local character = target.Parent
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            if humanoid and game.Players:GetPlayerFromCharacter(character) and game.Players:GetPlayerFromCharacter(character) ~= player then
-                -- 상대방의 머리(Head)를 정중앙 타겟으로 지정
-                lockedTarget = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
-                print("에임봇 타겟 지정됨: " .. character.Name)
+-- [3] 매 프레임마다 화면 중앙(Crosshair)과 가장 가까운 상대방을 찾아 자동으로 락온
+runService.RenderStepped:Connect(function()
+    if not isOn then return end
+
+    local closestTarget = nil
+    local shortestDistance = math.huge
+    local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+
+    -- 모든 플레이어 검사
+    for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
+        if otherPlayer ~= player and otherPlayer.Character then
+            local char = otherPlayer.Character
+            local humanoid = char:FindFirstChildOfClass("Humanoid")
+            local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
+
+            if humanoid and humanoid.Health > 0 and targetPart then
+                -- 월드 좌표를 화면(2D) 좌표로 변환
+                local screenPoint, onScreen = camera:WorldToViewportPoint(targetPart.Position)
+                
+                if onScreen then
+                    local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
+                    local distance = (screenPos - screenCenter).Magnitude
+
+                    -- 화면 중앙(정중앙 원 주변 일정 범위 내)에 가장 가까운 사람 찾기
+                    -- 숫자가 작을수록 중앙에 정확히 와야 작동 (현재 120픽셀 이내)
+                    if distance < 120 and distance < shortestDistance then
+                        shortestDistance = distance
+                        closestTarget = targetPart
+                    end
+                end
             end
         end
     end
-end)
 
--- 매 프레임마다 상대방이 화면 정중앙에 오도록 카메라 고정
-runService.RenderStepped:Connect(function()
-    if isOn and lockedTarget and lockedTarget.Parent then
-        local char = lockedTarget.Parent
-        local humanoid = char:FindFirstChildOfClass("Humanoid")
-        
-        -- 상대가 죽었거나 사라졌으면 타겟 해제
-        if not humanoid or humanoid.Health <= 0 then
-            lockedTarget = nil
-            return
-        end
-
-        -- 카메라 위치는 유지하고 시선만 상대방 머리를 향하게 함
+    -- 찾은 타겟이 있으면 화면 정중앙에 고정
+    if closestTarget and closestTarget.Parent then
         local camPos = camera.CFrame.Position
-        camera.CFrame = CFrame.new(camPos, lockedTarget.Position)
+        camera.CFrame = CFrame.new(camPos, closestTarget.Position)
     end
 end)
 
-print("에임봇 네모 스위치 생성 완료!")
+print("중앙원 오토 에임봇 스크립트 로드 완료!")
