@@ -1,15 +1,11 @@
 local player = game.Players.LocalPlayer
 local mouse = player:GetMouse()
+local camera = workspace.CurrentCamera
 local runService = game:GetService("RunService")
 
--- UI가 이미 있다면 제거
-if player.PlayerGui:FindFirstChild("LookAtGui") then
-    player.PlayerGui.LookAtGui:Destroy()
-end
-
--- ScreenGui 생성
+-- ScreenGui 생성 (고유한 이름 사용)
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "LookAtGui"
+screenGui.Name = "AimBotUniqueGui_2026"
 screenGui.Parent = player.PlayerGui
 
 -- 네모난 스위치 버튼 만들기
@@ -19,7 +15,7 @@ toggleButton.Position = UDim2.new(0.85, 0, 0.15, 0) -- 화면 우측 상단
 toggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 toggleButton.BorderSizePixel = 2
 toggleButton.BorderColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Text = "OFF\n(캐릭시선고정)"
+toggleButton.Text = "OFF\n(에임봇)"
 toggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
 toggleButton.TextSize = 12
 toggleButton.Font = Enum.Font.GothamBold
@@ -38,20 +34,20 @@ local lockedTarget = nil
 toggleButton.MouseButton1Click:Connect(function()
     isOn = not isOn
     if isOn then
-        toggleButton.Text = "ON\n(캐릭시선고정)"
+        toggleButton.Text = "ON\n(에임봇)"
         toggleButton.TextColor3 = Color3.fromRGB(60, 255, 60)
         toggleButton.BackgroundColor3 = Color3.fromRGB(20, 80, 20)
-        print("캐릭터 시선 고정 켜짐 (바라볼 상대를 클릭하세요)")
+        print("에임봇 켜짐 (조준할 상대를 클릭하세요)")
     else
-        toggleButton.Text = "OFF\n(캐릭시선고정)"
+        toggleButton.Text = "OFF\n(에임봇)"
         toggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
         toggleButton.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
         lockedTarget = nil
-        print("캐릭터 시선 고정 꺼짐")
+        print("에임봇 꺼짐")
     end
 end)
 
--- 화면을 클릭했을 때 바라볼 상대 지정
+-- 화면을 클릭했을 때 조준할 상대 지정
 mouse.Button1Down:Connect(function()
     if isOn then
         local target = mouse.Target
@@ -59,24 +55,30 @@ mouse.Button1Down:Connect(function()
             local character = target.Parent
             local humanoid = character:FindFirstChildOfClass("Humanoid")
             if humanoid and game.Players:GetPlayerFromCharacter(character) and game.Players:GetPlayerFromCharacter(character) ~= player then
-                lockedTarget = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
-                print("바라볼 대상 지정됨: " .. character.Name)
+                -- 상대방의 머리(Head)를 정중앙 타겟으로 지정
+                lockedTarget = character:FindFirstChild("Head") or character:FindFirstChild("HumanoidRootPart")
+                print("에임봇 타겟 지정됨: " .. character.Name)
             end
         end
     end
 end)
 
--- 매 프레임마다 내 캐릭터가 상대를 바라보게 회전시킴 (카메라는 자유로움!)
+-- 매 프레임마다 상대방이 화면 정중앙에 오도록 카메라 고정
 runService.RenderStepped:Connect(function()
     if isOn and lockedTarget and lockedTarget.Parent then
-        local character = player.Character
-        if character and character:FindFirstChild("HumanoidRootPart") then
-            local rootPart = character.HumanoidRootPart
-            -- 내 캐릭터의 위치에서 상대방 위치를 바라보는 방향 계산 (Y축 높이는 유지해서 땅에 박히지 않게 함)
-            local targetPos = Vector3.new(lockedTarget.Position.X, rootPart.Position.Y, lockedTarget.Position.Z)
-            rootPart.CFrame = CFrame.new(rootPart.Position, targetPos)
+        local char = lockedTarget.Parent
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        
+        -- 상대가 죽었거나 사라졌으면 타겟 해제
+        if not humanoid or humanoid.Health <= 0 then
+            lockedTarget = nil
+            return
         end
+
+        -- 카메라 위치는 유지하고 시선만 상대방 머리를 향하게 함
+        local camPos = camera.CFrame.Position
+        camera.CFrame = CFrame.new(camPos, lockedTarget.Position)
     end
 end)
 
-print("캐릭터 시선 고정 네모 스위치 생성 완료!")
+print("에임봇 네모 스위치 생성 완료!")
