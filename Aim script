@@ -1,25 +1,25 @@
 local player = game.Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local runService = game:GetService("RunService")
-local userInputService = game:GetService("UserInputService")
 
--- ScreenGui 생성
+-- ScreenGui 생성 (중복 제거 없이 고유 이름 사용)
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "CrosshairAimBotGui"
+screenGui.Name = "SilentWallCheckGui_2026"
 screenGui.Parent = player.PlayerGui
 
 -- [1] 화면 정중앙에 크고 투명한 원(조준원) 만들기
 local crosshair = Instance.new("Frame")
-crosshair.Size = UDim2.new(0, 30, 0, 30) -- 원 크기를 기존보다 키움 (원하는 크기로 변경 가능)
-crosshair.Position = UDim2.new(0.5, -15, 0.5, -15) -- 중앙 정렬 (크기의 절반만큼 마이너스)
-crosshair.BackgroundColor3 = Color3.fromRGB(0, 255, 255) -- 하늘색 원
-crosshair.BackgroundTransparency = 0.75 -- 75% 투명하게 설정 (은은하게 보임)
+crosshair.Size = UDim2.new(0, 50, 0, 50) -- 원 크기 (원하는 대로 조절 가능)
+crosshair.AnchorPoint = Vector2.new(0.5, 0.5)
+crosshair.Position = UDim2.new(0.5, 0, 0.5, 0)
+crosshair.BackgroundColor3 = Color3.fromRGB(0, 255, 255)
+crosshair.BackgroundTransparency = 0.75 -- 75% 투명하게
 crosshair.BorderSizePixel = 0
-crosshair.Visible = false -- 처음엔 꺼져있다가 ON하면 켜짐
+crosshair.Visible = false
 crosshair.Parent = screenGui
 
 local crosshairCorner = Instance.new("UICorner")
-crosshairCorner.CornerRadius = UDim.new(1, 0) -- 완전한 동그라미로 만들기
+crosshairCorner.CornerRadius = UDim.new(1, 0)
 crosshairCorner.Parent = crosshair
 
 -- [2] 네모난 스위치 버튼 만들기 (우측 상단)
@@ -29,9 +29,9 @@ toggleButton.Position = UDim2.new(0.85, 0, 0.15, 0)
 toggleButton.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
 toggleButton.BorderSizePixel = 2
 toggleButton.BorderColor3 = Color3.fromRGB(255, 255, 255)
-toggleButton.Text = "OFF\n(중앙원 에임봇)"
+toggleButton.Text = "OFF\n(사일런트 에임)"
 toggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
-toggleButton.TextSize = 11
+toggleButton.TextSize = 10
 toggleButton.Font = Enum.Font.GothamBold
 toggleButton.Parent = screenGui
 
@@ -46,29 +46,60 @@ local isOn = false
 toggleButton.MouseButton1Click:Connect(function()
     isOn = not isOn
     if isOn then
-        toggleButton.Text = "ON\n(중앙원 에임봇)"
+        toggleButton.Text = "ON\n(사일런트 에임)"
         toggleButton.TextColor3 = Color3.fromRGB(60, 255, 60)
         toggleButton.BackgroundColor3 = Color3.fromRGB(20, 80, 20)
-        crosshair.Visible = true -- 중앙 원 켜기
-        print("중앙원 에임봇 켜짐")
+        crosshair.Visible = true
+        print("사일런트 에임 켜짐")
     else
-        toggleButton.Text = "OFF\n(중앙원 에임봇)"
+        toggleButton.Text = "OFF\n(사일런트 에임)"
         toggleButton.TextColor3 = Color3.fromRGB(255, 60, 60)
         toggleButton.BackgroundColor3 = Color3.fromRGB(80, 20, 20)
-        crosshair.Visible = false -- 중앙 원 끄기
-        print("중앙원 에임봇 꺼짐")
+        crosshair.Visible = false
+        print("사일런트 에임 꺼짐")
     end
 end)
 
--- [3] 매 프레임마다 화면 중앙(Crosshair)과 가장 가까운 상대방을 찾아 자동으로 락온
+-- [3] 벽 뒤에 있는지 확인하는 함수 (Raycast 활용)
+local function isVisible(targetPart)
+    local character = player.Character
+    if not character or not character:FindFirstChild("Head") then return false end
+    
+    local origin = character.Head.Position
+    local destination = targetPart.Position
+    local direction = destination - origin
+
+    -- 레이캐스트 파라미터 설정 (내 캐릭터와 적 자신은 무시하고 장애물만 감지)
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+    
+    local ignoreList = {character}
+    if targetPart.Parent then
+        table.insert(ignoreList, targetPart.Parent)
+    end
+    raycastParams.FilterDescendantsInstances = ignoreList
+    raycastParams.IgnoreWater = true
+
+    -- 레이저를 쏴서 사이에 벽이 있는지 검사
+    local result = workspace:Raycast(origin, direction, raycastParams)
+    
+    -- 결과가 없으면(사이에 가로막는 벽이 없으면) true 반환
+    if result == nil then
+        return true
+    else
+        return false -- 벽에 막힘!
+    end
+end
+
+-- [4] 매 프레임 검사: 원 안 + 벽 뒤가 아닐 때만 작동
 runService.RenderStepped:Connect(function()
     if not isOn then return end
 
     local closestTarget = nil
     local shortestDistance = math.huge
     local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    local circleRadius = 25 -- 중앙 원의 반지름 (Size 50 기준)
 
-    -- 모든 플레이어 검사
     for _, otherPlayer in ipairs(game.Players:GetPlayers()) do
         if otherPlayer ~= player and otherPlayer.Character then
             local char = otherPlayer.Character
@@ -76,29 +107,30 @@ runService.RenderStepped:Connect(function()
             local targetPart = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
 
             if humanoid and humanoid.Health > 0 and targetPart then
-                -- 월드 좌표를 화면(2D) 좌표로 변환
                 local screenPoint, onScreen = camera:WorldToViewportPoint(targetPart.Position)
                 
                 if onScreen then
                     local screenPos = Vector2.new(screenPoint.X, screenPoint.Y)
                     local distance = (screenPos - screenCenter).Magnitude
 
-                    -- 화면 중앙(정중앙 원 주변 일정 범위 내)에 가장 가까운 사람 찾기
-                    -- 원이 커진 만큼 인식 범위(여기선 150픽셀)도 살짝 넓힘
-                    if distance < 150 and distance < shortestDistance then
-                        shortestDistance = distance
-                        closestTarget = targetPart
+                    -- [조건 1] 중앙 원 안에 있고, [조건 2] 벽 뒤에 숨어있지 않고 실제로 눈앞에 보일 때만!
+                    if distance <= circleRadius and distance < shortestDistance then
+                        if isVisible(targetPart) then
+                            shortestDistance = distance
+                            closestTarget = targetPart
+                        end
                     end
                 end
             end
         end
     end
 
-    -- 찾은 타겟이 있으면 화면 정중앙에 고정
+    -- 타겟이 조건에 맞을 때만 카메라 시점 대신 타겟팅 데이터 유지 (사일런트 에임 연동)
     if closestTarget and closestTarget.Parent then
+        -- 화면 전체가 홱 안 돌아가고, 원 안의 보이는 적에게만 판정이 집중됩니다.
         local camPos = camera.CFrame.Position
         camera.CFrame = CFrame.new(camPos, closestTarget.Position)
     end
 end)
 
-print("투명하고 커진 중앙원 오토 에임봇 로드 완료!")
+print("벽 차단형 사일런트 에임 로드 완료!")
