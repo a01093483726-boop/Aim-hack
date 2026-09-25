@@ -8,11 +8,12 @@ local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "CrosshairAimBotGui"
 screenGui.Parent = player.PlayerGui
 
--- [1] 화면 정중앙에 작은 원(조준원) 만들기
+-- [1] 화면 정중앙에 크고 투명한 원(조준원) 만들기
 local crosshair = Instance.new("Frame")
-crosshair.Size = UDim2.new(0, 10, 0, 10) -- 원 크기 (조절 가능)
-crosshair.Position = UDim2.new(0.5, -5, 0.5, -5) -- 정확히 화면 정중앙
+crosshair.Size = UDim2.new(0, 30, 0, 30) -- 원 크기를 기존보다 키움 (원하는 크기로 변경 가능)
+crosshair.Position = UDim2.new(0.5, -15, 0.5, -15) -- 중앙 정렬 (크기의 절반만큼 마이너스)
 crosshair.BackgroundColor3 = Color3.fromRGB(0, 255, 255) -- 하늘색 원
+crosshair.BackgroundTransparency = 0.75 -- 75% 투명하게 설정 (은은하게 보임)
 crosshair.BorderSizePixel = 0
 crosshair.Visible = false -- 처음엔 꺼져있다가 ON하면 켜짐
 crosshair.Parent = screenGui
@@ -83,8 +84,8 @@ runService.RenderStepped:Connect(function()
                     local distance = (screenPos - screenCenter).Magnitude
 
                     -- 화면 중앙(정중앙 원 주변 일정 범위 내)에 가장 가까운 사람 찾기
-                    -- 숫자가 작을수록 중앙에 정확히 와야 작동 (현재 120픽셀 이내)
-                    if distance < 120 and distance < shortestDistance then
+                    -- 원이 커진 만큼 인식 범위(여기선 150픽셀)도 살짝 넓힘
+                    if distance < 150 and distance < shortestDistance then
                         shortestDistance = distance
                         closestTarget = targetPart
                     end
@@ -100,4 +101,4 @@ runService.RenderStepped:Connect(function()
     end
 end)
 
-print("중앙원 오토 에임봇 스크립트 로드 완료!")
+print("투명하고 커진 중앙원 오토 에임봇 로드 완료!")
